@@ -20,6 +20,7 @@ class FrankaArmStateClient:
         self.q = None
         self.dq = None
         self.arm_q = None
+        self.ee_pose = None
         self.reset_joint_target = FrankaConstants.JOINT_NAMES
         self.reset_joint_target_values = np.zeros(len(self.reset_joint_target))
 
@@ -97,25 +98,26 @@ class FrankaArmStateClient:
         return self.ee_pose
 
     def get_joint_positions(self):
-        return self.joint_states.position
+        return self.q
 
     def get_joint_velocities(self):
-        return self.joint_states.velocity
+        return self.dq
 
     def get_joint_efforts(self):
-        return self.joint_states.effort
+        # TODO: Implement this method
+        return None
 
     def get_robot_state(self):
         return self.robot_state
 
     def get_gripper_positions(self):
-        return self.gripper_states.position
+        return self.gripper_pos
 
     def get_gripper_velocities(self):
-        return self.gripper_states.velocity
+        return None  # Gripper velocities are not stored in the current implementation
 
     def get_gripper_efforts(self):
-        return self.gripper_states.effort
+        return None  # Gripper efforts are not stored in the current implementation
 
 class FrankaConstants:
     '''

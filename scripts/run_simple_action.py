@@ -17,7 +17,7 @@ Typical usage example:
 import argparse
 
 # Third Party
-from frankapy import FrankaArm
+from industreallib.robot import FrankaArm
 
 # NVIDIA
 import industreallib.control.scripts.control_utils as control_utils

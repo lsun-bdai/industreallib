@@ -35,8 +35,9 @@ class FrankaArm:
     def __init__(self, 
                  node_name: str = "franka_arm",
                  init_ros: bool = True,
-                 use_gripper: bool = True
-        ):
+                 use_gripper: bool = False,
+                 reset_robot_on_init: bool = True,
+                 ):
         """
         Initialize a FrankaArm.
         """
@@ -95,6 +96,12 @@ class FrankaArm:
                 Homing, "/fr3_gripper/homing", self.node
             )
         self.start_executor()
+        # run something to init the robot
+        if reset_robot_on_init:
+            self.reset_joint()
+        else:
+            self.start_cartesian_impedance()
+            self.goto_delta_pose([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
     def publish_gains(self):
         gain_msg = CartesianImpedanceGain()
@@ -261,6 +268,11 @@ class FrankaArm:
     def __del__(self): 
         rclpy.shutdown()
     
+    def __getattr__(self, name):
+        if name.startswith('get_') and hasattr(self._state_client, name):
+            return getattr(self._state_client, name)
+        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+
 if __name__ == "__main__":
     arm = FrankaArm(use_gripper=False)
     arm.reset_joint()
