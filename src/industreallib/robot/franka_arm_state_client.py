@@ -8,23 +8,30 @@ import logging
 import tf_transformations as tr
 from geometry_msgs.msg import Pose, PoseStamped
 from spatialmath.base import rt2tr, qunit, q2r, r2q, qslerp, qeye
-
+from bdai_msgs.msg import CartesianImpedanceGain
 class FrankaArmStateClient:
     def __init__(self, 
                  ):
         self.node = Node("franka_arm_state_client")
+        # Joint related states
         self.joint_names = FrankaConstants.JOINT_NAMES
-        self.gripper_states = None
         self.joint_states = None
         self.robot_state = None
-        self.pos = None
-        self.dq = None
         self.q = None
-        self.force = None
-        self.torque = None
+        self.dq = None
+        self.arm_q = None
         self.reset_joint_target = FrankaConstants.JOINT_NAMES
         self.reset_joint_target_values = np.zeros(len(self.reset_joint_target))
-        self.arm_q = None
+
+        # End effector related states
+        self.pos = None
+        self.force = None
+        self.torque = None
+        self.cartesian_stiffness = None
+        self.cartesian_damping = None
+
+        # Gripper related states
+        self.gripper_states = None
         self.gripper_q = None
         # state subscriber
         self.state_sub = self.node.create_subscription(
@@ -38,6 +45,10 @@ class FrankaArmStateClient:
         )
         self.gripper_sub = self.node.create_subscription(
             JointState, "/fr3_gripper/joint_states", self._gripper_callback, 1000
+        )
+        self.cartesian_impedance_gain_sub = self.node.create_subscription(
+            CartesianImpedanceGain, "/franka_cartesian_impedance_controller/gains",
+            self._cartesian_stiffness_callback, 10
         )
 
     def _gripper_callback(self, msg: JointState):
@@ -77,6 +88,10 @@ class FrankaArmStateClient:
             torque = msg.k_f_ext_hat_k.wrench.torque
             self.torque = [torque.x, torque.y, torque.z]
         self.robot_state = msg
+
+    def _cartesian_stiffness_callback(self, msg: CartesianImpedanceGain):
+        self.cartesian_stiffness = msg.stiffness
+        self.cartesian_damping = msg.damping
 
     def get_ee_pose(self):
         return self.ee_pose

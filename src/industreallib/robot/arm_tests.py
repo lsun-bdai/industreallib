@@ -96,7 +96,35 @@ def cartesian_orientation_error_test():
     print("Cartesian Orientation Error Test Done")
     rclpy.shutdown()
 
+def cartesian_impedance_test():
+    arm = FrankaArm(use_gripper=False)
+    arm.reset_joint()
+    # move the arm a bit
+    arm.goto_delta_pose([0.03, 0.0, 0.0, 0.0, 0.0, 0.0])
+    arm.adjust_cartesian_impedance(
+        stiffness=np.array([1024.0, 1024.0, 1024.0, 64.0, 64.0, 64.0]), 
+        damping=np.array([48.0, 48.0, 48.0, 16.0, 16.0, 16.0])
+    )
+    while True:
+        user_input = input("Press 'q' to exit, 's' to adjust stiffness, or any other key to continue: ").lower()
+        if user_input == 'q':
+            break
+        elif user_input == 's':
+            try:
+                new_stiffness = [float(x) for x in input("Enter 6 new stiffness values separated by spaces: ").split()]
+                if len(new_stiffness) != 6:
+                    raise ValueError("Must enter exactly 6 values")
+                new_stiffness = np.array(new_stiffness)
+                new_damping = np.sqrt(new_stiffness)  # Adjust damping correspondingly
+                arm.adjust_cartesian_impedance(stiffness=new_stiffness, damping=new_damping)
+                print(f"Stiffness and damping adjusted successfully to {new_stiffness} and {new_damping}")
+            except ValueError as e:
+                print(f"Invalid input: {e}. Please try again.")
+
+    print("Cartesian Impedance Test Done")
+    rclpy.shutdown()
 
 if __name__ == "__main__":
-    cartesian_position_error_test()
-    cartesian_orientation_error_test()
+    # cartesian_position_error_test()
+    # cartesian_orientation_error_test()
+    cartesian_impedance_test()

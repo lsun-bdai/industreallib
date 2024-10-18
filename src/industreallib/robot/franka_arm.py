@@ -15,11 +15,11 @@ import rclpy
 from bdai_ros2_wrappers.action_client import ActionClientWrapper
 from control_msgs.action import FollowJointTrajectory
 from sensor_msgs.msg import JointState
-from franka_arm_state_client import FrankaArmStateClient
+from industreallib.robot.franka_arm_state_client import FrankaArmStateClient
 from rclpy.action import ActionClient
 from controller_manager_msgs.srv import SwitchController
 from franka_msgs.msg import FrankaRobotState
-from bdai_msgs.msg import CartesianImpedanceGoal
+from bdai_msgs.msg import CartesianImpedanceGoal, CartesianImpedanceGain
 from typing import Optional
 from franka_msgs.action import Grasp, Homing, Move
 from time import sleep
@@ -62,6 +62,19 @@ class FrankaArm:
             "/franka_cartesian_impedance_controller/commands",
             1000,
         )
+        self.cartesian_impedance_gain_publisher = self.node.create_publisher(
+            CartesianImpedanceGain, 
+            "/franka_cartesian_impedance_controller/gains", 
+            10
+        )
+        self.gain_frequency = 1
+        self.cartesian_stiffness = np.array([1024.0, 1024.0, 1024.0, 49.0, 49.0, 49.0])
+        self.cartesian_damping = np.array([64.0, 64.0, 64.0, 14.0, 14.0, 14.0])
+        self.cartesian_impedance_gain_publish_timer = self.node.create_timer(
+            1/self.gain_frequency, 
+            self.publish_gains,
+        )
+
         # Switch controller client
         self.switch_cli = self.node.create_client(
             SwitchController, "/controller_manager/switch_controller"
@@ -82,6 +95,12 @@ class FrankaArm:
                 Homing, "/fr3_gripper/homing", self.node
             )
         self.start_executor()
+
+    def publish_gains(self):
+        gain_msg = CartesianImpedanceGain()
+        gain_msg.stiffness = self.cartesian_stiffness
+        gain_msg.damping = self.cartesian_damping
+        self.cartesian_impedance_gain_publisher.publish(gain_msg)
 
     def start_executor(self):
         def spin_node(executor):
@@ -115,6 +134,13 @@ class FrankaArm:
         switch_resp = self.switch_cli.call(switch_req)
         return switch_resp
 
+    def adjust_cartesian_impedance(self,
+                                   stiffness: np.ndarray,
+                                   damping: np.ndarray,
+                                   ):
+        self.cartesian_stiffness = stiffness
+        self.cartesian_damping = damping
+       
     def is_skill_done(self):
         pass
     
