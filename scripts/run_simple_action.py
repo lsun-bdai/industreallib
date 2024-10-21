@@ -54,7 +54,7 @@ def get_args():
 
 if __name__ == "__main__":
     args = get_args()
-    franka_arm = FrankaArm()
+    franka_arm = FrankaArm(use_gripper=True)
 
     if args.action == "get_pose":
         control_utils.print_pose(franka_arm=franka_arm)

@@ -29,7 +29,7 @@ from rclpy.executors import SingleThreadedExecutor
 import numpy as np
 from scipy.spatial.transform import Rotation
 from threading import Thread
-
+from franka_msgs.msg import GraspEpsilon
 
 class FrankaArm:
     def __init__(self, 
@@ -99,9 +99,13 @@ class FrankaArm:
         # run something to init the robot
         if reset_robot_on_init:
             self.reset_joint()
+            if self.use_gripper:
+                self.open_gripper()
+            self.goto_delta_pose([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
         else:
             self.start_cartesian_impedance()
             self.goto_delta_pose([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+        self.guide_mode_timer = None
 
     def publish_gains(self):
         gain_msg = CartesianImpedanceGain()
@@ -117,6 +121,11 @@ class FrankaArm:
         executor.add_node(self._state_client.node)
         thread = Thread(target=spin_node, args=(executor,), daemon=True)
         thread.start()
+    
+    def end_executor(self):
+        self.node.destroy_node()
+        self._state_client.node.destroy_node()
+        rclpy.shutdown()
 
     
     def start_cartesian_impedance(self):
@@ -251,22 +260,53 @@ class FrankaArm:
                      block=True, 
                      ignore_errors=True, 
                      skill_desc='GoToGripper'):
-        pass
+        if grasp:
+            goal_msg = Grasp.Goal(
+                width=width, 
+                speed=speed, 
+                force=force, 
+                epsilon=GraspEpsilon(inner=epsilon_inner, outer=epsilon_outer)
+            )
+            self.gripper_grasp_action_client.send_goal_and_wait(
+                skill_desc, goal_msg, timeout_sec=5
+            )
+        else:
+            goal_msg = Move.Goal(width=width, speed=speed)
+            self.gripper_move_action_client.send_goal_and_wait(
+                skill_desc, goal_msg, timeout_sec=5
+            )
 
     def home_gripper(self, block=True, skill_desc='HomeGripper'):
-        pass
+        goal_msg = Homing.Goal()
+        self.gripper_homing_action_client.send_goal_and_wait(
+            skill_desc, goal_msg, timeout_sec=5
+        )
     
     def open_gripper(self, block=True, skill_desc='OpenGripper'):
-        pass
+        self.goto_gripper(width=0.09, grasp=False, block=block, skill_desc=skill_desc)
     
     def close_gripper(self, grasp=True, block=True, skill_desc='CloseGripper'):
-        pass
+        self.goto_gripper(width=0.01, grasp=grasp, block=block, skill_desc=skill_desc)
     
-    def run_guide_mode(self, duration=10, block=True, skill_desc='GuideMode'):
-        pass
+    def start_guide_mode(self, skill_desc='GuideMode'):
+        self.node.get_logger().info("Starting guide mode")
+        self.node.get_logger().info("Press Enter to enter guide mode...")
+        self.adjust_cartesian_impedance(stiffness=np.zeros(6), damping=np.zeros(6))        
+        # Set a timer for maximum duration (60 seconds)
+        if self.guide_mode_timer:
+            self.guide_mode_timer.cancel()
+        self.guide_mode_timer = self.node.create_timer(60.0, self.stop_guide_mode)
+    
+    def stop_guide_mode(self):
+        if self.guide_mode_timer:
+            self.guide_mode_timer.cancel()
+            self.guide_mode_timer = None
+        self.adjust_cartesian_impedance(stiffness=np.array([1024.0, 1024.0, 1024.0, 49.0, 49.0, 49.0]), damping=np.array([64.0, 64.0, 64.0, 14.0, 14.0, 14.0]))
+        self.publish_gains()
+        self.node.get_logger().info("Guide mode terminated")
     
     def __del__(self): 
-        rclpy.shutdown()
+        self.end_executor()
     
     def __getattr__(self, name):
         if name.startswith('get_') and hasattr(self._state_client, name):
@@ -291,4 +331,4 @@ if __name__ == "__main__":
     move_with_delay([0.0, -0.03, 0.0, 0.0, 0.0, 0.0])
     move_with_delay([0.0, 0.0, -0.03, 0.0, 0.0, 0.0])
     print("Done")
-    rclpy.shutdown()
+

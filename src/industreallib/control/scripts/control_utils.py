@@ -100,10 +100,10 @@ def get_pose_from_guide_mode(franka_arm, max_duration):
 
     input("Caution: Robot may drop. Press Enter to continue...")
     # Implement guide mode functionality here
-    # franka_arm.start_guide_mode()
+    franka_arm.start_guide_mode()
 
     input(f"Robot is in guide mode for max duration of {max_duration} seconds. Press Enter to terminate...")
-    # franka_arm.stop_guide_mode()
+    franka_arm.stop_guide_mode()
 
     print("Stopped guide mode.")
 
