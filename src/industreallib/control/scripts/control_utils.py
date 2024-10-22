@@ -32,7 +32,7 @@ def close_gripper(franka_arm):
 def go_to_joint_angles(franka_arm, joint_angles, duration):
     """Goes to a specified set of joint angles."""
     print("\nGoing to goal joint angles...")
-    franka_arm.goto_joints(joint_angles, duration=duration)
+    franka_arm.goto_joints(joint_angles)
     print("Finished going to goal joint angles.")
 
     print_joint_angles(franka_arm=franka_arm)
@@ -72,11 +72,7 @@ def go_to_pose(franka_arm, pos, ori_mat, duration, use_impedance):
 def go_home(franka_arm, duration):
     """Goes to a hard-coded home configuration."""
     print("\nGoing to home configuration...")
-    go_to_joint_angles(
-        franka_arm=franka_arm,
-        joint_angles=[0.0, -1.76076077e-01, 0.0, -1.86691416e00, 0.0, 1.69344379e00, np.pi / 4],
-        duration=duration,
-    )
+    franka_arm.reset_joint()
     print("Reached home configuration.")
 
 
