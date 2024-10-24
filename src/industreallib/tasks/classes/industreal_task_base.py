@@ -14,21 +14,28 @@ import random
 
 # Third Party
 import numpy as np
-import rospy
 import torch
 import yaml
-from autolab_core import RigidTransform
-from franka_interface_msgs.msg import SensorDataGroup
-from frankapy import FrankaArm, FrankaConstants
 from gym.spaces import Box
 from rl_games.algos_torch.players import PpoPlayerContinuous
 from scipy.spatial.transform import Rotation
 
-# NVIDIA
+# ROS 2
+import rclpy
+from rclpy.node import Node
+
 import industreallib.control.scripts.control_utils as control_utils
 import industreallib.perception.scripts.detect_objects as detect_objects
 import industreallib.perception.scripts.map_workspace as map_workspace
 import industreallib.perception.scripts.perception_utils as perception_utils
+
+# Project-specific
+from industreallib.robot.franka_arm import FrankaArm
+from industreallib.robot.franka_arm_state_client import FrankaConstants
+from bdai_msgs.msg import CartesianImpedanceGoal, CartesianImpedanceGain
+from geometry_msgs.msg import TransformStamped, Pose, PoseStamped
+
+
 
 
 class IndustRealTaskBase:
@@ -289,8 +296,8 @@ class IndustRealTaskBase:
 
         print("\nGoing to goal pose with RL...")
         # Get observations, get actions, send targets, and repeat
-        initial_time = rospy.get_time()
-        while rospy.get_time() - initial_time < self.task_instance_config.motion.duration:
+        initial_time = rclpy.get_time()
+        while rclpy.get_time() - initial_time < self.task_instance_config.motion.duration:
             observations, curr_state = self._get_observations(
                 goal_pos=goal_pos, goal_ori_mat=goal_ori_mat, franka_arm=franka_arm
             )
@@ -333,27 +340,17 @@ class IndustRealTaskBase:
 
     def _go_to_goal_with_baseline(self, goal, franka_arm):
         """Goes to a goal using a baseline method (frankapy or libfranka)."""
-        goal_pos = goal[:3]
-        goal_ori_mat = Rotation.from_euler("XYZ", goal[3:]).as_matrix()  # intrinsic rotations
-        transform = RigidTransform(
-            translation=goal_pos, rotation=goal_ori_mat, from_frame="franka_tool", to_frame="world"
-        )
+        # Convert goal to the format expected by goto_delta_pose
+        delta_position = goal[:3]
+        delta_orientation = Rotation.from_euler("XYZ", goal[3:]).as_quat()  # Convert Euler to quaternion
+
+        # Combine position and orientation into a single array
+        delta_ee_pose = np.concatenate([delta_position, delta_orientation])
 
         print(f"\nGoing to goal pose with {self.task_instance_config.motion.source}...")
-        if "frankapy" in self.task_instance_config.motion.source:
-            franka_arm.goto_pose(
-                tool_pose=transform,
-                duration=self.task_instance_config.motion.duration,
-                use_impedance=True,
-                ignore_virtual_walls=True,
-            )
-        if "libfranka" in self.task_instance_config.motion.source:
-            franka_arm.goto_pose(
-                tool_pose=transform,
-                duration=self.task_instance_config.motion.duration,
-                use_impedance=False,
-                ignore_virtual_walls=True,
-            )
+        franka_arm.goto_delta_pose(
+            delta_ee_pose=delta_ee_pose
+        )
         print(f"Finished going to goal pose with {self.task_instance_config.motion.source}.")
 
         if self._args.debug_mode:
@@ -361,8 +358,8 @@ class IndustRealTaskBase:
             control_utils.print_pose_error(
                 curr_pos=curr_pose.translation,
                 curr_ori_mat=curr_pose.rotation,
-                targ_pos=goal_pos,
-                targ_ori_mat=goal_ori_mat,
+                targ_pos=goal[:3],
+                targ_ori_mat=Rotation.from_quat(goal[3:7], scalar_first=True).as_matrix(),
             )
 
     def _get_policy(self):
@@ -424,22 +421,14 @@ class IndustRealTaskBase:
 
     def _start_target_stream(self, franka_arm):
         """Starts streaming targets to franka-interface via frankapy."""
-        self._ros_rate = rospy.Rate(self.task_instance_config.rl.policy_eval_freq)
-        self._ros_publisher = rospy.Publisher(
-            FrankaConstants.DEFAULT_SENSOR_PUBLISHER_TOPIC, SensorDataGroup, queue_size=1000
-        )
-
-        # Initiate streaming with dummy command to go to current pose
-        # NOTE: Closely adapted from
-        # https://github.com/iamlab-cmu/frankapy/blob/master/examples/run_dynamic_pose.py
+        # ros2 rate
+        self._ros_rate = rclpy.Rate(self.task_instance_config.rl.policy_eval_freq)
+        if hasattr(self.task_instance_config.control, 'prop_gains'):
+            stiffness = np.array(self.task_instance_config.control.prop_gains)
+            damping = 2 * np.sqrt(stiffness)  # Critical damping
+            self.franka_arm.adjust_cartesian_impedance(stiffness, damping)
         franka_arm.goto_pose(
-            tool_pose=franka_arm.get_pose(),
-            duration=1.0,
-            use_impedance=True,
-            dynamic=True,
-            buffer_time=self.task_instance_config.motion.duration * 10.0,
-            cartesian_impedances=list(self.task_instance_config.control.prop_gains),
-            ignore_virtual_walls=True,
+            ee_pose=franka_arm.get_ee_pose()
         )
 
     def _get_observations(self):
@@ -501,17 +490,14 @@ class IndustRealTaskBase:
         else:
             raise ValueError("Invalid control mode.")
 
-        ros_msg = control_utils.compose_ros_msg(
-            targ_pos=targ_pos,
-            targ_ori_quat=np.roll(
-                Rotation.from_matrix(targ_ori_mat).as_quat(), shift=1
-            ),  # (w, x, y, z)
-            prop_gains=self.task_instance_config.control.prop_gains,
-            msg_count=self._ros_msg_count,
+        # Convert target orientation matrix to quaternion
+        targ_ori_quat = Rotation.from_matrix(targ_ori_mat).as_quat()
+        # Combine target position and orientation into a single array
+        targ_ee_pose = np.concatenate([targ_pos, targ_ori_quat])
+        self.franka_arm.goto_pose(
+            ee_pose=targ_ee_pose
         )
-
-        self._ros_publisher.publish(ros_msg)
-        self._ros_msg_count += 1
+        
 
     def do_simple_procedure(self, procedure, franka_arm):
         """Does specified procedure."""
@@ -531,3 +517,4 @@ class IndustRealTaskBase:
                     control_utils.go_home(franka_arm=franka_arm, duration=5.0)
                 else:
                     raise ValueError(f"Invalid step {step} in motion procedure.")
+

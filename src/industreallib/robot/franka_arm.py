@@ -165,6 +165,11 @@ class FrankaArm:
        
     def is_skill_done(self):
         pass
+
+    def stop_skill(self):
+        """Stops the current skill and maintains the current position."""
+        print("Stopping current skill and maintaining position")
+        self.goto_pose(self._state_client.get_ee_pose())
     
     def wait_for_skill(self):
         while not self.is_skill_done():
