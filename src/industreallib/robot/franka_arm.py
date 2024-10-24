@@ -25,7 +25,7 @@ from franka_msgs.action import Grasp, Homing, Move
 from time import sleep
 from trajectory_msgs.msg import JointTrajectoryPoint
 from geometry_msgs.msg import TransformStamped, Pose, PoseStamped
-from rclpy.executors import SingleThreadedExecutor
+from rclpy.executors import MultiThreadedExecutor, SingleThreadedExecutor
 import numpy as np
 from scipy.spatial.transform import Rotation
 from threading import Thread
@@ -116,16 +116,22 @@ class FrankaArm:
     def start_executor(self):
         def spin_node(executor):
             executor.spin()
-        executor = SingleThreadedExecutor()
-        executor.add_node(self.node)
-        executor.add_node(self._state_client.node)
-        thread = Thread(target=spin_node, args=(executor,), daemon=True)
-        thread.start()
+        self.executor = SingleThreadedExecutor()
+        self.executor.add_node(self.node)
+        self.executor.add_node(self._state_client.node)
+        try:    
+            self.executor_thread = Thread(target=spin_node, args=(self.executor,), daemon=True)
+            self.executor_thread.start()
+        except KeyboardInterrupt:
+            self.end_executor()
     
     def end_executor(self):
+        # stop the thread and executor properly
+        self.executor.shutdown()
         self.node.destroy_node()
         self._state_client.node.destroy_node()
         rclpy.shutdown()
+        self.executor_thread.join()
 
     
     def start_cartesian_impedance(self):
@@ -301,6 +307,8 @@ class FrankaArm:
         if self.guide_mode_timer:
             self.guide_mode_timer.cancel()
             self.guide_mode_timer = None
+        # set current pose as impedance controller goal to avoid drift
+        self.goto_delta_pose([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
         self.adjust_cartesian_impedance(stiffness=np.array([1024.0, 1024.0, 1024.0, 49.0, 49.0, 49.0]), damping=np.array([64.0, 64.0, 64.0, 14.0, 14.0, 14.0]))
         self.publish_gains()
         self.node.get_logger().info("Guide mode terminated")
