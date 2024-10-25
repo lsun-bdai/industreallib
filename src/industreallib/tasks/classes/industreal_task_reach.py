@@ -35,21 +35,17 @@ class IndustRealTaskReach(IndustRealTaskBase):
         # the robot base frame, and the orientation observations are typically
         # represented as quaternions (x, y, z, w).
 
-        curr_state = franka_arm.get_robot_state()
-        # For list of all keys in state dict, see
-        # https://github.com/iamlab-cmu/frankapy/blob/master/frankapy/franka_arm_state_client.py
-
-        curr_joint_angles = curr_state["joints"]
-        curr_pos = curr_state["pose"].translation
-        curr_ori_mat = curr_state["pose"].rotation
-
+        curr_state = {}
+        curr_joint_angles = franka_arm.get_joint_positions()
+        curr_pos = franka_arm.get_ee_pose()[:3]
+        curr_ori_quat = franka_arm.get_ee_pose()[3:7] # xyzw
         observations = (
             torch.from_numpy(
                 np.hstack(
                     [
                         curr_joint_angles,
                         curr_pos,
-                        Rotation.from_matrix(curr_ori_mat).as_quat(),  # (x, y, z, w)
+                        curr_ori_quat,
                         goal_pos,
                     ]
                 )
@@ -57,5 +53,8 @@ class IndustRealTaskReach(IndustRealTaskBase):
             .to(torch.float32)
             .to(self._device)
         )
+        curr_state["joint_angles"] = curr_joint_angles
+        curr_state["ee_pose"] = np.concatenate([curr_pos, curr_ori_quat])
+        curr_state["ee_ori_mat"] = Rotation.from_quat(curr_ori_quat).as_matrix()
 
         return observations, curr_state

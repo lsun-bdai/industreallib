@@ -30,7 +30,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 from threading import Thread
 from franka_msgs.msg import GraspEpsilon
-
+from industreallib.robot.franka_arm_state_client import FrankaConstants
 class FrankaArm:
     def __init__(self, 
                  node_name: str = "franka_arm",
@@ -133,6 +133,14 @@ class FrankaArm:
         rclpy.shutdown()
         self.executor_thread.join()
 
+    def create_rate(self, frequency):
+        return self.node.create_rate(frequency)
+
+    def get_logger(self):
+        return self.node.get_logger()
+    
+    def get_time(self):
+        return self.node.get_clock().now().nanoseconds / 1e9
     
     def start_cartesian_impedance(self):
         """Switch from joint trajectory controller to cartesian impedance controller"""
@@ -169,7 +177,7 @@ class FrankaArm:
     def stop_skill(self):
         """Stops the current skill and maintains the current position."""
         print("Stopping current skill and maintaining position")
-        self.goto_pose(self._state_client.get_ee_pose())
+        self.goto_delta_pose([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
     
     def wait_for_skill(self):
         while not self.is_skill_done():
@@ -188,7 +196,11 @@ class FrankaArm:
     
     def goto_pose(self, 
                   ee_pose,
+                  duration=None,
                   ):
+        # Note: ee_pose is expected to be in the format [x, y, z, qx, qy, qz, qw]
+        # where x, y, z represent the position, and qx, qy, qz, qw represent the orientation as a quaternion
+        # TODO: Add duration implementation
         self.cartesian_impedance_goal = CartesianImpedanceGoal()
         goal_pose = Pose()
         goal_pose.position.x = ee_pose[0]
@@ -211,13 +223,13 @@ class FrankaArm:
         # get target position
         delta_ee_position = np.array(delta_ee_pose[0:3])
         target_ee_position = delta_ee_position + current_ee_pose[0:3]
-        current_ee_orientation = Rotation.from_quat(current_ee_pose[3:7], scalar_first=True).as_quat() # xyzs
+        current_ee_orientation = current_ee_pose[3:7] # xyzs
         delta_ee_orientation = np.array(delta_ee_pose[3:6])
         # get target orientation
         target_ee_orientation = (
             Rotation.from_euler("xyz", delta_ee_orientation) *
-            Rotation.from_quat(current_ee_orientation, scalar_first=False)
-        ).as_quat(scalar_first=False)  # xyzs
+            Rotation.from_quat(current_ee_orientation)
+        ).as_quat()  # xyzs
         target_ee_pose = np.concatenate([target_ee_position, target_ee_orientation])
         self.goto_pose(target_ee_pose)
 
@@ -251,7 +263,8 @@ class FrankaArm:
         """Resets Joints (needed after running for hours)"""
         self.stop_cartesian_impedance()
         trajectory = {}
-        reset_joint_target = [0.0, 0.0, 0.0, -2.34, 0.0, 2.30, 0.77]
+        reset_joint_target = FrankaConstants.HOME_JOINTS_AMBER
+        # reset_joint_target = [0.0, 0.0, 0.0, -2.34, 0.0, 2.30, 0.77]
         trajectory["position"] = np.array([reset_joint_target])
         trajectory["velocity"] = np.zeros((1, len(reset_joint_target)))
         trajectory["times"] = np.array([[3.0]])

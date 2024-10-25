@@ -41,13 +41,11 @@ def go_to_joint_angles(franka_arm, joint_angles, duration):
 def go_to_pos(franka_arm, pos, duration):
     """Goes to a specified position, with gripper pointing downward."""
     # Compose goal pose
-    pose = Pose()
-    pose.position.x, pose.position.y, pose.position.z = pos
-    q = Rotation.from_matrix([[1, 0, 0], [0, -1, 0], [0, 0, -1]]).as_quat()
-    pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w = q
+    q = Rotation.from_matrix([[1, 0, 0], [0, -1, 0], [0, 0, -1]]).as_quat() # xyzw
+    ee_pose = np.concatenate([pos, q])
 
     print("\nGoing to goal position...")
-    franka_arm.goto_pose(pose, duration=duration)
+    franka_arm.goto_pose(ee_pose, duration=duration)
     print("Finished going to goal position.")
 
     curr_pose = franka_arm.get_ee_pose()
@@ -60,9 +58,9 @@ def go_to_pose(franka_arm, pos, ori_mat, duration=None, use_impedance=False):
     # Compose goal pose
     # if it's a matrix, convert to quat
     if isinstance(ori_mat, np.ndarray) and ori_mat.shape == (3, 3):
-        quat = r2q(ori_mat, order="sxyz")
+        quat = r2q(ori_mat, order="xyzs")
     else:
-        quat = ori_mat  # assume it's already a quaternion
+        quat = ori_mat  # assume it's already a quaternion in xyzw format
     ee_pose = np.concatenate([pos, quat])
 
     print("\nGoing to goal pose...")
@@ -72,7 +70,7 @@ def go_to_pose(franka_arm, pos, ori_mat, duration=None, use_impedance=False):
     print_pose(franka_arm=franka_arm)
 
 
-def go_home(franka_arm, home_joint_angles=None):
+def go_home(franka_arm, duration=None, home_joint_angles=None):
     """Goes to a hard-coded home configuration."""
     print("\nGoing to home configuration...")
     if home_joint_angles is None:

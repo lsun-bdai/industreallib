@@ -175,7 +175,7 @@ def _collect_robot_and_tag_poses(
                 cv2.waitKey(delay=2000)
                 cv2.destroyAllWindows()
             # save image since we cannot display it in container
-            perception_utils.save_image(image=image_labeled, file_name="tag_detection_calibrate.png", folder_name="calibrate_extrinsics")
+            perception_utils.save_image(image=image_labeled, file_name=f"tag_detection_calibrate_{num_tag_detections}.png", folder_name="calibrate_extrinsics")
         else:
             print("\nTag not detected.")
 

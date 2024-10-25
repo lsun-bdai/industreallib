@@ -296,22 +296,22 @@ class IndustRealTaskBase:
 
         print("\nGoing to goal pose with RL...")
         # Get observations, get actions, send targets, and repeat
-        initial_time = rclpy.get_time()
-        while rclpy.get_time() - initial_time < self.task_instance_config.motion.duration:
+        initial_time = franka_arm.get_time()
+        while franka_arm.get_time() - initial_time < self.task_instance_config.motion.duration:
             observations, curr_state = self._get_observations(
                 goal_pos=goal_pos, goal_ori_mat=goal_ori_mat, franka_arm=franka_arm
             )
             actions = self._get_actions(observations=observations)
             self._send_targets(
                 actions=actions,
-                curr_pos=curr_state["pose"].translation,
-                curr_ori_mat=curr_state["pose"].rotation,
+                curr_pos=curr_state["ee_pose"][:3],
+                curr_ori_mat=curr_state["ee_ori_mat"],
             )
 
             # If current pose is close enough to goal pose, terminate early
             pos_err, ori_err_rad = control_utils.get_pose_error(
-                curr_pos=curr_state["pose"].translation,
-                curr_ori_mat=curr_state["pose"].rotation,
+                curr_pos=curr_state["ee_pose"][:3],
+                curr_ori_mat=curr_state["ee_ori_mat"],
                 targ_pos=goal_pos,
                 targ_ori_mat=goal_ori_mat,
             )
@@ -321,8 +321,19 @@ class IndustRealTaskBase:
             ):
                 print("Terminated early due to error below threshold.")
                 break
-
-            self._ros_rate.sleep()
+            
+            if self._ros_rate is not None:
+                self._ros_rate.sleep()
+            else:
+                print("Warning: self._ros_rate is not set. Unable to control loop rate.")
+            
+            # Monitor and log the actual loop rate
+            current_time = franka_arm.get_time()
+            if hasattr(self, '_last_loop_time'):
+                loop_duration = current_time - self._last_loop_time
+                actual_rate = 1.0 / loop_duration if loop_duration > 0 else float('inf')
+                print(f"Actual loop rate: {actual_rate:.2f} Hz", "pos_err:", pos_err, "ori_err:", ori_err_rad)
+            self._last_loop_time = current_time
         print("Finished going to goal pose with RL.")
 
         franka_arm.stop_skill()
@@ -332,8 +343,8 @@ class IndustRealTaskBase:
 
         if self._args.debug_mode:
             control_utils.print_pose_error(
-                curr_pos=curr_state["pose"].translation,
-                curr_ori_mat=curr_state["pose"].rotation,
+                curr_pos=curr_state["ee_pose"][:3],
+                curr_ori_mat=curr_state["ee_ori_mat"],
                 targ_pos=goal_pos,
                 targ_ori_mat=goal_ori_mat,
             )
@@ -356,10 +367,10 @@ class IndustRealTaskBase:
         if self._args.debug_mode:
             curr_pose = franka_arm.get_pose()
             control_utils.print_pose_error(
-                curr_pos=curr_pose.translation,
-                curr_ori_mat=curr_pose.rotation,
+                curr_pos=curr_pose[:3],
+                curr_ori_mat=curr_pose[3:7],
                 targ_pos=goal[:3],
-                targ_ori_mat=Rotation.from_quat(goal[3:7], scalar_first=True).as_matrix(),
+                targ_ori_mat=Rotation.from_quat(goal[3:7]).as_matrix(),
             )
 
     def _get_policy(self):
@@ -422,9 +433,9 @@ class IndustRealTaskBase:
     def _start_target_stream(self, franka_arm):
         """Starts streaming targets to franka-interface via frankapy."""
         # ros2 rate
-        self._ros_rate = rclpy.Rate(self.task_instance_config.rl.policy_eval_freq)
+        self._ros_rate = franka_arm.create_rate(self.task_instance_config.rl.policy_eval_freq)
         if hasattr(self.task_instance_config.control, 'prop_gains'):
-            stiffness = np.array(self.task_instance_config.control.prop_gains)
+            stiffness = np.array(self.task_instance_config.control.prop_gains, dtype=np.float64)
             damping = 2 * np.sqrt(stiffness)  # Critical damping
             self.franka_arm.adjust_cartesian_impedance(stiffness, damping)
         franka_arm.goto_pose(

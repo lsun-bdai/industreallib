@@ -62,6 +62,7 @@ class FrankaArmStateClient:
         # base frame o: fr3_link0
         # end effector frame ee: fr3_link8 if no hand, else fr3_hand_tcp
         # For now assume fr3_hand is attached, base to tip pose
+        # Note: we want r2q tquaternion in xyzw format
         is_arr = isinstance(msg.o_t_ee, np.ndarray)
         if is_arr:
             pose_b2t = msg.o_t_ee.reshape(4, 4).T
@@ -69,7 +70,7 @@ class FrankaArmStateClient:
             pose_b2t = msg_to_se3(msg.o_t_ee)
 
         position = pose_b2t[:3, 3]
-        quat = r2q(pose_b2t[:3, :3], order="sxyz")
+        quat = r2q(pose_b2t[:3, :3], order="xyzs")
         pq_b2t = np.concatenate([position, quat])
         self.ee_pose = pq_b2t
 
@@ -137,7 +138,13 @@ class FrankaConstants:
     DEFAULT_TERM_BUFFER_TIME = 0.2
 
     HOME_JOINTS = [0, -math.pi / 4, 0, -3 * math.pi / 4, 0, math.pi / 2, math.pi / 4]
-
+    HOME_JOINTS_AMBER = [-0.3325635602190494,
+                         -0.3271776168275735,
+                         -0.18774932824766805,
+                         -2.084814424269835,
+                         -0.08799292682559962,
+                         1.7324361702743114,
+                         0.2892642582111312]
     # See https://frankaemika.github.io/docs/control_parameters.html
     JOINT_NAMES = ["fr3_joint1",
                    "fr3_joint2",

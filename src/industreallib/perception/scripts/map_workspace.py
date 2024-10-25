@@ -24,11 +24,12 @@ import os
 import cv2
 import numpy as np
 import pupil_apriltags as apriltag
-from frankapy import FrankaArm
+from industreallib.robot.franka_arm import FrankaArm
+from scipy.spatial.transform import Rotation
 
 # NVIDIA
 import industreallib.perception.scripts.perception_utils as perception_utils
-
+import industreallib.control.scripts.control_utils as control_utils
 
 def get_args():
     """Gets arguments from the command line."""
@@ -64,7 +65,7 @@ def main(perception_config_file_name, franka_arm):
         families=config.tag.type, quad_decimate=1.0, quad_sigma=0.0, decode_sharpening=0.25
     )
     # NOTE: Instantiation of this detector brightens the image
-
+    control_utils.go_home(franka_arm=franka_arm)
     image = perception_utils.get_image(
         pipeline=pipeline, display_images=config.tag_detection.display_images
     )
@@ -122,13 +123,16 @@ def _get_workspace_mapping(
 
     # Get tag pose in robot frame
     extrinsics = perception_utils.get_extrinsics(file_name=config.input.extrinsics_file_name)
-    curr_pose = franka_arm.get_pose()
+    curr_pose = franka_arm.get_ee_pose()
+    curr_pos = curr_pose[:3]
+    curr_ori_quat = curr_pose[3:]
+    curr_ori_mat = Rotation.from_quat(curr_ori_quat).as_matrix()
     from_tag_to_robot_t, _ = perception_utils.convert_tag_pose_to_robot_frame(
         tag_pose_t=tag_pose_t,
         tag_pose_r=tag_pose_r,
         extrinsics=extrinsics,
-        robot_pose_t=curr_pose.translation,
-        robot_pose_r=curr_pose.rotation,
+        robot_pose_t=curr_pos,
+        robot_pose_r=curr_ori_mat,
     )
 
     # Get real-world length of each pixel
@@ -182,6 +186,6 @@ def _save_workspace_mapping(config, workspace_bounds, pixel_length):
 if __name__ == "__main__":
     """Gets arguments. Initializes the robot. Runs the script."""
     args = get_args()
-    franka_arm = FrankaArm()
+    franka_arm = FrankaArm(reset_robot_on_init=False)
 
     main(perception_config_file_name=args.perception_config_file_name, franka_arm=franka_arm)

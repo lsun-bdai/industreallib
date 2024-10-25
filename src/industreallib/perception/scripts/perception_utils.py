@@ -118,9 +118,9 @@ def save_image(image, file_name, folder_name=None):
     """Saves an image to file."""
     print("\nSaving image...")
     if folder_name is None:
-        folder_name = os.path.dirname(__file__)
+        folder_name = os.path.join(os.path.dirname(__file__), '..', 'io')
     else:
-        folder_name = os.path.join(os.path.dirname(__file__), folder_name)
+        folder_name = os.path.join(os.path.dirname(__file__), '..', 'io', folder_name)
         if not os.path.exists(folder_name):
             os.makedirs(name=folder_name, exist_ok=True)
     cv2.imwrite(filename=os.path.join(folder_name, file_name), img=image)
