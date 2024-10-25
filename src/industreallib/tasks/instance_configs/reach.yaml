@@ -5,7 +5,7 @@ goals:
   source: random  # options: random, perception, guide
   random:
     num_goals: 10
-    bounds: [[0.4, 0.65], [-0.225, 0.225], [0.10, 0.30],  # (x, y, z)
+    bounds: [[0.4, 0.5], [-0.225, 0.225], [0.20, 0.30],  # (x, y, z)
              [3.14159, 3.14159], [0.0, 0.0], [0.0, 0.0]]  # Euler angles (XYZ, intrinsic)
   perception:
     config: null
@@ -39,7 +39,7 @@ control:
     nominal:
       action_scale: [0.01, 0.01, 0.01, 0.01, 0.01, 0.01]
     plai:
-      action_scale: [0.0005, 0.0005, 0.0005, 0.001, 0.001, 0.001]
+      action_scale: [0.005, 0.005, 0.005, 0.005, 0.005, 0.005]
     leaky_plai:
       action_scale: null
       pos_err_thresh: null
