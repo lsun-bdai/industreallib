@@ -70,3 +70,6 @@ venv*/*
 
 # Jupyter files
 *checkpoint.ipynb
+
+# in io folder
+src/industreallib/perception/io/*
