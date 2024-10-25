@@ -23,8 +23,8 @@ import time
 import cv2
 import numpy as np
 import pupil_apriltags as apriltag
-from frankapy import FrankaArm
-
+from industreallib.robot.franka_arm import FrankaArm
+from scipy.spatial.transform import Rotation
 # NVIDIA
 import industreallib.control.scripts.control_utils as control_utils
 import industreallib.perception.scripts.perception_utils as perception_utils
@@ -174,7 +174,8 @@ def _collect_robot_and_tag_poses(
                 cv2.imshow("Tag Detection", image_labeled)
                 cv2.waitKey(delay=2000)
                 cv2.destroyAllWindows()
-
+            # save image since we cannot display it in container
+            perception_utils.save_image(image=image_labeled, file_name="tag_detection_calibrate.png", folder_name="calibrate_extrinsics")
         else:
             print("\nTag not detected.")
 
@@ -192,22 +193,17 @@ def _move_robot_to_goal(franka_arm, goal_pos, goal_ori_mat):
     # First use frankapy controller (better IK) to go to pose,
     # then use libfranka controller (better accuracy) to go to same pose
     control_utils.go_to_pose(
-        franka_arm=franka_arm, pos=goal_pos, ori_mat=goal_ori_mat, duration=5.0, use_impedance=True
-    )
-    control_utils.go_to_pose(
-        franka_arm=franka_arm, pos=goal_pos, ori_mat=goal_ori_mat, duration=5.0, use_impedance=False
-    )
-
+        franka_arm=franka_arm, pos=goal_pos, ori_mat=goal_ori_mat)
     _spin_robot_end_effector(franka_arm=franka_arm)
 
     print("\nAllowing vibrations to decay...")
     time.sleep(5.0)
     print("Allowed vibrations to decay.")
 
-    curr_pose = franka_arm.get_pose()
-    curr_pos = curr_pose.translation.copy()
-    curr_ori_mat = curr_pose.rotation.copy()
-
+    curr_pose = franka_arm.get_ee_pose()
+    curr_pos = curr_pose[:3]
+    curr_ori_quat = curr_pose[3:]
+    curr_ori_mat = Rotation.from_quat(curr_ori_quat).as_matrix()
     return curr_pos, curr_ori_mat
 
 
@@ -218,9 +214,7 @@ def _spin_robot_end_effector(franka_arm):
 
 def _go_home(franka_arm, home_joint_angles):
     """Moves the robot to the home joint configuration."""
-    control_utils.go_to_joint_angles(
-        franka_arm=franka_arm, joint_angles=home_joint_angles, duration=5.0
-    )
+    control_utils.go_home(franka_arm=franka_arm)
 
 
 def _get_extrinsics(robot_poses_t, robot_poses_r, tag_poses_t, tag_poses_r):
@@ -261,7 +255,7 @@ if __name__ == "__main__":
     )
 
     # Initialize robot, camera, and AprilTag detector
-    franka_arm = FrankaArm()
+    franka_arm = FrankaArm(reset_robot_on_init=False)
     pipeline = perception_utils.get_camera_pipeline(
         width=config.camera.image_width, height=config.camera.image_height
     )

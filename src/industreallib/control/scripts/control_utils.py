@@ -13,7 +13,7 @@ import numpy as np
 from geometry_msgs.msg import Pose, Quaternion
 from bdai_msgs.msg import CartesianImpedanceGoal, CartesianImpedanceGain
 from scipy.spatial.transform import Rotation
-
+from spatialmath.base import r2q
 
 def open_gripper(franka_arm):
     """Opens the gripper."""
@@ -54,25 +54,31 @@ def go_to_pos(franka_arm, pos, duration):
     print("\nCurrent position:", curr_pose[:3])
 
 
-def go_to_pose(franka_arm, pos, ori_mat, duration, use_impedance):
+def go_to_pose(franka_arm, pos, ori_mat, duration=None, use_impedance=False):
     """Goes to a specified pose."""
+    # TODO: Add use_impedance or equivalent implementation for different control modes
     # Compose goal pose
-    pose = Pose()
-    pose.position.x, pose.position.y, pose.position.z = pos
-    q = Rotation.from_matrix(ori_mat).as_quat()
-    pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w = q
+    # if it's a matrix, convert to quat
+    if isinstance(ori_mat, np.ndarray) and ori_mat.shape == (3, 3):
+        quat = r2q(ori_mat, order="sxyz")
+    else:
+        quat = ori_mat  # assume it's already a quaternion
+    ee_pose = np.concatenate([pos, quat])
 
     print("\nGoing to goal pose...")
-    franka_arm.goto_pose(pose, duration=duration)
+    franka_arm.goto_pose(ee_pose, duration=duration)
     print("Finished going to goal pose.")
 
     print_pose(franka_arm=franka_arm)
 
 
-def go_home(franka_arm, duration):
+def go_home(franka_arm, home_joint_angles=None):
     """Goes to a hard-coded home configuration."""
     print("\nGoing to home configuration...")
-    franka_arm.reset_joint()
+    if home_joint_angles is None:
+        franka_arm.reset_joint()
+    else:
+        franka_arm.goto_joints(home_joint_angles)
     print("Reached home configuration.")
 
 

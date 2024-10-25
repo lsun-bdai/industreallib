@@ -16,9 +16,9 @@ calibrate_extrinsics:
     pos_to_point_at: [0.5069, 0.0, 0.0]
   tag_detection:
     num_detections: 64
-    display_images: True
+    display_images: False
   output:
-    file_name: extrinsics_industreallib.json
+    file_name: amber_extrinsics_industreallib.json
 
 map_workspace:
   input:
@@ -31,7 +31,7 @@ map_workspace:
     length: 3.0  # [inches]
     active_pixel_ratio: 0.6
   tag_detection:
-    display_images: True
+    display_images: False
   output:
     file_name: workspace_mapping.json
     image_file_name: tag_detection.png
@@ -53,13 +53,13 @@ detect_objects:
       connectors_5_classes:
         label_names: ['background', '3_prong_receptacle', '3_prong_plug', '2_prong_receptacle', '2_prong_plug']
     confidence_thresh: 0.9
-    display_images: True
+    display_images: False
   augmentation:
     augment_image: True
     num_augmentations: 16
   output:
-    json_file_name: object_detections.json
-    image_file_name: object_detections.png
+    json_file_name: "${detect_objects.object_detection.scene.type}_detections.json"
+    image_file_name: "${detect_objects.object_detection.scene.type}_detections.png"
   
 generate_goals:
   one_time_offset: [0.0, 0.0, 0.0]

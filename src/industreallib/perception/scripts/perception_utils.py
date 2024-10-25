@@ -114,10 +114,16 @@ def label_tag_detection(image, tag_corner_pixels, tag_family):
     return image_labeled
 
 
-def save_image(image, file_name):
+def save_image(image, file_name, folder_name=None):
     """Saves an image to file."""
     print("\nSaving image...")
-    cv2.imwrite(filename=os.path.join(os.path.dirname(__file__), '..', 'io', file_name), img=image)
+    if folder_name is None:
+        folder_name = os.path.dirname(__file__)
+    else:
+        folder_name = os.path.join(os.path.dirname(__file__), folder_name)
+        if not os.path.exists(folder_name):
+            os.makedirs(name=folder_name, exist_ok=True)
+    cv2.imwrite(filename=os.path.join(folder_name, file_name), img=image)
     print("Saved image.")
 
 
