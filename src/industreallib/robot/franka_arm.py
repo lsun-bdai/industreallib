@@ -27,7 +27,7 @@ from trajectory_msgs.msg import JointTrajectoryPoint
 from geometry_msgs.msg import TransformStamped, Pose, PoseStamped
 from rclpy.executors import MultiThreadedExecutor, SingleThreadedExecutor
 import numpy as np
-from scipy.spatial.transform import Rotation
+from scipy.spatial.transform import Rotation, Slerp
 from threading import Thread
 from franka_msgs.msg import GraspEpsilon
 from industreallib.robot.franka_arm_state_client import FrankaConstants
@@ -68,9 +68,16 @@ class FrankaArm:
             "/franka_cartesian_impedance_controller/gains", 
             10
         )
+
+        # Arm Parameters for Control of End Effector
         self.gain_frequency = 1
+        self.control_frequency = 50
         self.cartesian_stiffness = np.array([1024.0, 1024.0, 1024.0, 49.0, 49.0, 49.0])
         self.cartesian_damping = np.array([64.0, 64.0, 64.0, 14.0, 14.0, 14.0])
+        self.max_linear_speed = 0.2  # m/s
+        self.max_angular_speed = 0.5  # rad/s
+        
+        # Publish gains at a fixed frequency
         self.cartesian_impedance_gain_publish_timer = self.node.create_timer(
             1/self.gain_frequency, 
             self.publish_gains,
@@ -133,9 +140,15 @@ class FrankaArm:
         rclpy.shutdown()
         self.executor_thread.join()
 
-    def create_rate(self, frequency):
-        return self.node.create_rate(frequency)
+    def create_rate(self, frequency=None):
+        if frequency is None:
+            frequency = self.control_frequency
+        else:
+            self.control_frequency = frequency
 
+        self.control_rate = self.node.create_rate(frequency)
+        return self.control_rate
+    
     def get_logger(self):
         return self.node.get_logger()
     
@@ -194,13 +207,13 @@ class FrankaArm:
             done = self._gripper_move_action_client.wait_for_result()
         sleep(2)
     
-    def goto_pose(self, 
-                  ee_pose,
-                  duration=None,
-                  ):
-        # Note: ee_pose is expected to be in the format [x, y, z, qx, qy, qz, qw]
-        # where x, y, z represent the position, and qx, qy, qz, qw represent the orientation as a quaternion
-        # TODO: Add duration implementation
+    def goto_pose(self, ee_pose):
+        """Goes to specified end-effector pose directly.
+        
+        Args:
+            ee_pose: Target pose in format [x, y, z, qx, qy, qz, qw]
+        """
+        # Publish target pose
         self.cartesian_impedance_goal = CartesianImpedanceGoal()
         goal_pose = Pose()
         goal_pose.position.x = ee_pose[0]
@@ -210,11 +223,58 @@ class FrankaArm:
         goal_pose.orientation.y = ee_pose[4]
         goal_pose.orientation.z = ee_pose[5]
         goal_pose.orientation.w = ee_pose[6]
+        
         self.cartesian_impedance_goal.pose = goal_pose
         self.cartesian_impedance_goal_publisher.publish(self.cartesian_impedance_goal)
 
+    def goto_pose_with_duration(self, ee_pose, duration=None):
+        """Goes to specified end-effector pose with interpolation over given duration.
+        
+        Args:
+            ee_pose: Target pose in format [x, y, z, qx, qy, qz, qw]
+            duration: Time to reach target pose in seconds
+        """
+        # Get current pose
+        current_ee_pose = self._state_client.get_ee_pose()
+
+        # If no duration specified, check distance and set reasonable duration
+        if duration is None:
+            pos_dist = np.linalg.norm(ee_pose[:3] - current_ee_pose[:3])
+            ori_dist = np.arccos(2 * np.power(np.dot(current_ee_pose[3:], ee_pose[3:]), 2) - 1)
+            duration = max(pos_dist / self.max_linear_speed, ori_dist / self.max_angular_speed)
+
+        # Calculate number of interpolation steps based on control frequency
+        num_steps = int(duration * self.control_frequency)
+        
+        # Spherical interpolation for orientation
+        current_rot = Rotation.from_quat(current_ee_pose[3:])
+        target_rot = Rotation.from_quat(ee_pose[3:])
+        slerp = Slerp([0, 1], Rotation.concatenate([current_rot, target_rot]))
+        for step in range(num_steps + 1):
+            # Linear interpolation for position
+            alpha = step / num_steps
+            interp_pos = current_ee_pose[:3] + alpha * (ee_pose[:3] - current_ee_pose[:3])
+            interp_quat = slerp(alpha).as_quat()
+            
+            # Publish interpolated pose
+            self.cartesian_impedance_goal = CartesianImpedanceGoal()
+            goal_pose = Pose()
+            goal_pose.position.x = interp_pos[0]
+            goal_pose.position.y = interp_pos[1] 
+            goal_pose.position.z = interp_pos[2]
+            goal_pose.orientation.x = interp_quat[0]
+            goal_pose.orientation.y = interp_quat[1]
+            goal_pose.orientation.z = interp_quat[2]
+            goal_pose.orientation.w = interp_quat[3]
+            
+            self.cartesian_impedance_goal.pose = goal_pose
+            self.cartesian_impedance_goal_publisher.publish(self.cartesian_impedance_goal)
+            
+            self.control_rate.sleep()
+
     def goto_delta_pose(self,
                         delta_ee_pose,
+                        duration=None,
                         ):
         # get current end effector pose
         current_ee_pose = self._state_client.get_ee_pose()
@@ -231,7 +291,10 @@ class FrankaArm:
             Rotation.from_quat(current_ee_orientation)
         ).as_quat()  # xyzs
         target_ee_pose = np.concatenate([target_ee_position, target_ee_orientation])
-        self.goto_pose(target_ee_pose)
+        if duration is None:
+            self.goto_pose(target_ee_pose)
+        else:
+            self.goto_pose_with_duration(target_ee_pose, duration)
 
     def goto_joints(self,
                     joint_trajectory,
@@ -259,15 +322,17 @@ class FrankaArm:
         self.node.get_logger().info("sending trajectory")
         self.arm_trajectory_cli.send_goal(goal_msg)
     
-    def reset_joint(self):
+    def reset_joint(self, duration=None):
         """Resets Joints (needed after running for hours)"""
+        if duration is None:
+            duration = 3.0
         self.stop_cartesian_impedance()
         trajectory = {}
         reset_joint_target = FrankaConstants.HOME_JOINTS_AMBER
         # reset_joint_target = [0.0, 0.0, 0.0, -2.34, 0.0, 2.30, 0.77]
         trajectory["position"] = np.array([reset_joint_target])
         trajectory["velocity"] = np.zeros((1, len(reset_joint_target)))
-        trajectory["times"] = np.array([[3.0]])
+        trajectory["times"] = np.array([[duration]])
         self.goto_joints(trajectory)
         time.sleep(0.01)
         print("Reset trajectory complete")

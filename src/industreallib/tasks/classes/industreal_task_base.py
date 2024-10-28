@@ -440,7 +440,7 @@ class IndustRealTaskBase:
             self.franka_arm.adjust_cartesian_impedance(stiffness, damping)
         franka_arm.goto_pose(
             ee_pose=franka_arm.get_ee_pose()
-        )
+        ) # go to current pose to activate the impedance controller
 
     def _get_observations(self):
         """Gets observations from frankapy. Should be defined in a task-specific subclass."""

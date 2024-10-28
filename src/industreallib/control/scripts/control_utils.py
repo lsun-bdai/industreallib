@@ -32,6 +32,7 @@ def close_gripper(franka_arm):
 def go_to_joint_angles(franka_arm, joint_angles, duration):
     """Goes to a specified set of joint angles."""
     print("\nGoing to goal joint angles...")
+    # TODO: check if joint_angles has time component, if not add duration info.
     franka_arm.goto_joints(joint_angles)
     print("Finished going to goal joint angles.")
 
@@ -45,7 +46,7 @@ def go_to_pos(franka_arm, pos, duration):
     ee_pose = np.concatenate([pos, q])
 
     print("\nGoing to goal position...")
-    franka_arm.goto_pose(ee_pose, duration=duration)
+    franka_arm.goto_pose_with_duration(ee_pose, duration=duration)
     print("Finished going to goal position.")
 
     curr_pose = franka_arm.get_ee_pose()
@@ -64,7 +65,7 @@ def go_to_pose(franka_arm, pos, ori_mat, duration=None, use_impedance=False):
     ee_pose = np.concatenate([pos, quat])
 
     print("\nGoing to goal pose...")
-    franka_arm.goto_pose(ee_pose, duration=duration)
+    franka_arm.goto_pose_with_duration(ee_pose, duration=duration)
     print("Finished going to goal pose.")
 
     print_pose(franka_arm=franka_arm)
@@ -74,23 +75,23 @@ def go_home(franka_arm, duration=None, home_joint_angles=None):
     """Goes to a hard-coded home configuration."""
     print("\nGoing to home configuration...")
     if home_joint_angles is None:
-        franka_arm.reset_joint()
+        franka_arm.reset_joint(duration=duration)
     else:
-        franka_arm.goto_joints(home_joint_angles)
+        go_to_joint_angles(franka_arm=franka_arm, joint_angles=home_joint_angles, duration=duration)
     print("Reached home configuration.")
 
 
 def go_upward(franka_arm, dist, duration):
     """Goes upward by a specified distance while maintaining gripper orientation."""
     print("\nGoing upward...")
-    franka_arm.goto_delta_pose([0.0, 0.0, dist, 0.0, 0.0, 0.0])
+    franka_arm.goto_delta_pose([0.0, 0.0, dist, 0.0, 0.0, 0.0], duration=duration)
     print("Finished going upward.")
 
 
 def go_downward(franka_arm, dist, duration):
     """Goes downward by a specified distance while maintaining gripper orientation."""
     print("\nGoing downward...")
-    franka_arm.goto_delta_pose([0.0, 0.0, -dist, 0.0, 0.0, 0.0])
+    franka_arm.goto_delta_pose([0.0, 0.0, -dist, 0.0, 0.0, 0.0], duration=duration)
     print("Finished going downward.")
 
 
