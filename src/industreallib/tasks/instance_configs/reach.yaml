@@ -25,7 +25,7 @@ motion:
 
 rl:
   checkpoint_name: industreal_policy_reach
-  policy_eval_freq: 60.0
+  policy_eval_freq: 20.0
   pos_err_thresh: 0.0001  # position threshold below which to terminate early
   ori_err_rad_thresh: 0.00873  # orientation threshold below which to terminate early
   observation_noise_pos: null
@@ -39,7 +39,7 @@ control:
     nominal:
       action_scale: [0.01, 0.01, 0.01, 0.01, 0.01, 0.01]
     plai:
-      action_scale: [0.005, 0.005, 0.005, 0.005, 0.005, 0.005]
+      action_scale: [0.002, 0.002, 0.002, 0.002, 0.002, 0.002]
     leaky_plai:
       action_scale: null
       pos_err_thresh: null

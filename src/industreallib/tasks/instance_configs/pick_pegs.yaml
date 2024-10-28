@@ -26,7 +26,7 @@ motion:
 
 rl:
   checkpoint_name: industreal_policy_generic
-  policy_eval_freq: 60.0
+  policy_eval_freq: 20.0 # cannot reach 60 Hz due to latency TODO: fix @lsun-bdai
   pos_err_thresh: 0.001  # position threshold below which to terminate early
   ori_err_rad_thresh: 0.0873  # orientation threshold below which to terminate early
   observation_noise_pos: null

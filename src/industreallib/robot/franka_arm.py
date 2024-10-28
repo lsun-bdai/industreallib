@@ -35,7 +35,7 @@ class FrankaArm:
     def __init__(self, 
                  node_name: str = "franka_arm",
                  init_ros: bool = True,
-                 use_gripper: bool = False,
+                 use_gripper: bool = True,
                  reset_robot_on_init: bool = True,
                  ):
         """
@@ -340,7 +340,7 @@ class FrankaArm:
         raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
 
 if __name__ == "__main__":
-    arm = FrankaArm(use_gripper=False)
+    arm = FrankaArm(use_gripper=True)
     arm.reset_joint()
     # move in turn along x, y, z and get back, then repeat at 5 Hz
     import time
