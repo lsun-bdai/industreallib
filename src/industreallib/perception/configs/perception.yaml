@@ -4,7 +4,7 @@ calibrate_extrinsics:
     image_height: 1080
   tag:
     type: tagStandard52h13
-    length: 6.0  # [inches]
+    length: 3.0  # [inches]
     active_pixel_ratio: 0.6  # For details, see https://github.com/AprilRobotics/apriltag/wiki/AprilTag-User-Guide
   robot:
     home_joint_angles: [0.0, -1.76076077e-01, 0.0, -1.86691416e+00, 0.0, 1.69344379e+00, 7.85398163e-01]
@@ -38,7 +38,7 @@ map_workspace:
 
 detect_objects:
   input:
-    workspace_mapping_file_name: workspace_mapping.json
+    workspace_mapping_file_name: amber_workspace_mapping.json
     checkpoint_file_name: industreal_detector_pegs.pt  # options: industreal_detector_pegs, industreal_detector_gears, industreal_detector_connectors
   camera:
     image_width: 1920  # should be same as for map_workspace
