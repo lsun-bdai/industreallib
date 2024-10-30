@@ -16,7 +16,7 @@ import cv2
 import numpy as np
 import pyrealsense2 as rs
 from omegaconf import OmegaConf
-
+import time
 
 def get_perception_config(file_name, module_name):
     """Gets an IndustRealLib perception configuration from a YAML file."""
@@ -37,6 +37,16 @@ def get_camera_pipeline(width, height):
     )
 
     pipeline.start(config)
+
+    # Get the device and sensor
+    profile = pipeline.get_active_profile()
+    device = profile.get_device()
+    color_sensor = device.query_sensors()[1]  # Color sensor (usually the second one)
+
+    # color_sensor.set_option(rs.option.enable_auto_exposure, 1)
+    color_sensor.set_option(rs.option.enable_auto_exposure, 0)
+    color_sensor.set_option(rs.option.exposure, 1500)
+    color_sensor.set_option(rs.option.enable_auto_white_balance, 1)
 
     return pipeline
 

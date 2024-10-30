@@ -72,6 +72,7 @@ class FrankaArm:
         # Arm Parameters for Control of End Effector
         self.gain_frequency = 1
         self.control_frequency = 50
+        self.control_rate = None
         self.cartesian_stiffness = np.array([1024.0, 1024.0, 1024.0, 49.0, 49.0, 49.0])
         self.cartesian_damping = np.array([64.0, 64.0, 64.0, 14.0, 14.0, 14.0])
         self.max_linear_speed = 0.2  # m/s
@@ -234,6 +235,8 @@ class FrankaArm:
             ee_pose: Target pose in format [x, y, z, qx, qy, qz, qw]
             duration: Time to reach target pose in seconds
         """
+        if self.control_rate is None:
+            self.create_rate()
         # Get current pose
         current_ee_pose = self._state_client.get_ee_pose()
 

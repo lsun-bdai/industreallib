@@ -8,7 +8,7 @@ the variables and methods that are common for all sequences.
 """
 
 # Third Party
-from frankapy import FrankaArm
+from industreallib.robot.franka_arm import FrankaArm
 
 # NVIDIA
 import industreallib.control.scripts.control_utils as control_utils

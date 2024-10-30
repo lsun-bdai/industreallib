@@ -174,8 +174,8 @@ def perturb_xy_pos(franka_arm, radial_bound):
         delta_y = random.uniform(-radial_bound, radial_bound)
         curr_dist = np.linalg.norm([delta_x, delta_y])
 
-    print("\nPerturbing xy-position...")
-    franka_arm.goto_delta_pose([delta_x, delta_y, 0.0, 0.0, 0.0, 0.0])
+    print("\nPerturbing xy-position with delta_x =", delta_x, "and delta_y =", delta_y)
+    franka_arm.goto_delta_pose([delta_x, delta_y, 0.0, 0.0, 0.0, 0.0], duration=1.0)
     print("Finished perturbing xy-position.")
 
 
@@ -183,8 +183,8 @@ def perturb_z_pos(franka_arm, bounds):
     """Randomly perturbs the z-position within a specified range."""
     delta_z = random.uniform(bounds[0], bounds[1])
 
-    print("\nPerturbing z-position...")
-    franka_arm.goto_delta_pose([0.0, 0.0, delta_z, 0.0, 0.0, 0.0])
+    print("\nPerturbing z-position with delta_z =", delta_z)
+    franka_arm.goto_delta_pose([0.0, 0.0, delta_z, 0.0, 0.0, 0.0], duration=1.0)
     print("Finished perturbing z-position.")
 
 
@@ -192,8 +192,8 @@ def perturb_yaw(franka_arm, bounds):
     """Randomly perturbs the gripper yaw angle within a specified range."""
     delta_yaw = random.uniform(bounds[0], bounds[1])
 
-    print("\nPerturbing yaw...")
-    franka_arm.goto_delta_pose([0.0, 0.0, 0.0, 0.0, 0.0, delta_yaw])
+    print("\nPerturbing yaw with delta_yaw =", delta_yaw)
+    franka_arm.goto_delta_pose([0.0, 0.0, 0.0, 0.0, 0.0, delta_yaw], duration=1.0)
     print("Finished perturbing yaw.")
 
 

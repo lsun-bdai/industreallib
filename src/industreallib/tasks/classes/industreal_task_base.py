@@ -19,7 +19,7 @@ import yaml
 from gym.spaces import Box
 from rl_games.algos_torch.players import PpoPlayerContinuous
 from scipy.spatial.transform import Rotation
-
+import time
 # ROS 2
 import rclpy
 from rclpy.node import Node
@@ -128,7 +128,10 @@ class IndustRealTaskBase:
         # getting multiple goals is not supported.
 
         pose = control_utils.get_pose_from_guide_mode(franka_arm=self.franka_arm, max_duration=60.0)
-        goal = np.asarray([*pose.translation, *Rotation.from_matrix(pose.rotation).as_euler("XYZ")])
+        pos = pose[:3]
+        ori_quat = pose[3:]  # xyzw quaternion
+        ori_euler = Rotation.from_quat(ori_quat).as_euler('XYZ')  # intrinsic rotations
+        goal = np.concatenate([pos, ori_euler])
         self.goal_coords = [goal]
 
         # Perturb position and yaw angle
@@ -303,6 +306,7 @@ class IndustRealTaskBase:
             )
             actions = self._get_actions(observations=observations)
             self._send_targets(
+                franka_arm=franka_arm,
                 actions=actions,
                 curr_pos=curr_state["ee_pose"][:3],
                 curr_ori_mat=curr_state["ee_ori_mat"],
@@ -437,7 +441,7 @@ class IndustRealTaskBase:
         if hasattr(self.task_instance_config.control, 'prop_gains'):
             stiffness = np.array(self.task_instance_config.control.prop_gains, dtype=np.float64)
             damping = 2 * np.sqrt(stiffness)  # Critical damping
-            self.franka_arm.adjust_cartesian_impedance(stiffness, damping)
+            franka_arm.adjust_cartesian_impedance(stiffness, damping)
         franka_arm.goto_pose(
             ee_pose=franka_arm.get_ee_pose()
         ) # go to current pose to activate the impedance controller
@@ -460,7 +464,7 @@ class IndustRealTaskBase:
 
         return actions
 
-    def _send_targets(self, actions, curr_pos, curr_ori_mat):
+    def _send_targets(self, actions, curr_pos, curr_ori_mat, franka_arm):
         """Sends pose targets to franka-interface via frankapy."""
         # NOTE: All actions are assumed to be in the form of [delta_position; delta_orientation],
         # where delta position is in the robot base frame, delta orientation is in the end-effector
@@ -505,7 +509,7 @@ class IndustRealTaskBase:
         targ_ori_quat = Rotation.from_matrix(targ_ori_mat).as_quat()
         # Combine target position and orientation into a single array
         targ_ee_pose = np.concatenate([targ_pos, targ_ori_quat])
-        self.franka_arm.goto_pose(
+        franka_arm.goto_pose(
             ee_pose=targ_ee_pose
         )
         
